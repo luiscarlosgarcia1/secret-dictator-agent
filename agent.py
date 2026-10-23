@@ -332,11 +332,16 @@ def _vote(state: ReadModel) -> str:
         return "yes"
     risk = state.combined_risk(president) + state.combined_risk(chancellor)
     if state.faction == LIBERAL and state.fascist_policies >= 3:
-        # Electing the Dictator as Chancellor now ends the game. Only an
-        # authorized Liberal investigation clears a Chancellor. At two failed
-        # Governments, allow a zero-or-better public-risk Government to avoid
-        # an otherwise imminent Chaos policy.
-        if chancellor in state.confirmed_non_dictators:
+        # Electing the Dictator as Chancellor now ends the game. A Liberal
+        # Seat's own authorized role, like a Liberal investigation result,
+        # affirmatively clears that Seat as a Chancellor. Zero risk is still
+        # only an absence of evidence. At two failed Governments, allow a
+        # zero-or-better public-risk Government to avoid an imminent Chaos
+        # policy.
+        if (
+            chancellor in state.confirmed_non_dictators
+            or (state.role == LIBERAL and chancellor == state.you)
+        ):
             return "yes"
         if state.failed_governments >= 2 and risk <= 0:
             return "yes"
