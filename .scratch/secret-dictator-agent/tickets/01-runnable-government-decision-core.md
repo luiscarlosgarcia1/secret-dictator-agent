@@ -4,10 +4,18 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** complete
 
-- [ ] A fresh process handles initialization and repeated nomination or vote Decision Requests with exactly one newline-terminated JSON response per request, flushing each response and sending diagnostics only to stderr.
-- [ ] The Read Model derives ordered Seats, the acting Seat's role/setup knowledge, living Seats, current and prior Government, policy totals, and Chaos term-limit reset exclusively from Visible History.
-- [ ] Nomination excludes ineligible Government members (including the five-living-Seat term-limit exception), and the response builder substitutes a clockwise legal nomination or a valid vote enum if strategy output is invalid or history is partly recoverable.
-- [ ] Process-level tests demonstrate the initialization, nomination, vote, malformed-optional-content, and stdout-purity contract without using replay-global roles, deck order, or unobserved hands.
+- [x] A fresh process handles initialization and repeated nomination or vote Decision Requests with exactly one newline-terminated JSON response per request, flushing each response and sending diagnostics only to stderr.
+- [x] The Read Model derives ordered Seats, the acting Seat's role/setup knowledge, living Seats, current and prior Government, policy totals, and Chaos term-limit reset exclusively from Visible History.
+- [x] Nomination excludes ineligible Government members (including the five-living-Seat term-limit exception), and the response builder substitutes a clockwise legal nomination or a valid vote enum if strategy output is invalid or history is partly recoverable.
+- [x] Process-level tests demonstrate the initialization, nomination, vote, malformed-optional-content, and stdout-purity contract without using replay-global roles, deck order, or unobserved hands.
+
+## Comments
+
+Completed with `agent.py` and `tests/test_agent_core.py`. The persistent
+standard-library JSONL process emits exactly one flushed response per input
+line, reserves diagnostics for stderr, reconstructs seat-visible government
+state, and validates deterministic nomination/vote fallbacks. Verified with
+`python3 -m unittest discover -s tests -v` and `python3 -m py_compile agent.py`.
 
