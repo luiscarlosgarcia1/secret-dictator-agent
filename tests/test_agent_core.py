@@ -276,7 +276,7 @@ class AgentProcessTests(unittest.TestCase):
         ])
         self.assertEqual(stderr, "")
 
-    def test_fascists_protect_the_known_dictator_before_three_policies(self) -> None:
+    def test_fascist_prethreshold_votes_support_self_and_known_dictator(self) -> None:
         fascist_start = start_event(president="seat-1", role="fascist", faction="fascist")
         fascist_start["event"]["knownFascists"] = ["seat-2"]
         fascist_start["event"]["knownDictator"] = "seat-3"
@@ -291,7 +291,40 @@ class AgentProcessTests(unittest.TestCase):
         )
         self.assertEqual(responses, [
             {"type": "chancellor-nominated", "target": "seat-2"},
-            {"type": "vote-cast", "vote": "no"},
+            {"type": "vote-cast", "vote": "yes"},
+        ])
+        self.assertEqual(stderr, "")
+
+    def test_fascist_prethreshold_cover_rule_is_explicit_and_dictator_role_stays_distinct(self) -> None:
+        fascist_start = start_event(president="seat-2", role="fascist", faction="fascist")
+        fascist_start["event"]["knownFascists"] = ["seat-3"]
+        fascist_start["event"]["knownDictator"] = "seat-4"
+        self_government = [
+            fascist_start,
+            {"event": {"type": "chancellor-nominated", "chancellor": "seat-1"}},
+        ]
+        dictator_government = [
+            fascist_start,
+            {"event": {"type": "chancellor-nominated", "chancellor": "seat-4"}},
+        ]
+        threshold_dictator_chancellor = dictator_government + [
+            *[{"event": {"type": "policy-enacted", "policy": "fascist"}} for _ in range(3)],
+        ]
+        dictator_history = [
+            start_event(president="seat-2", role="dictator", faction="fascist"),
+            {"event": {"type": "chancellor-nominated", "chancellor": "seat-4"}},
+        ]
+        responses, stderr = self.run_requests(
+            {"type": "decision", "history": self_government, "decision": {"kind": "vote"}},
+            {"type": "decision", "history": dictator_government, "decision": {"kind": "vote"}},
+            {"type": "decision", "history": threshold_dictator_chancellor, "decision": {"kind": "vote"}},
+            {"type": "decision", "history": dictator_history, "decision": {"kind": "vote"}},
+        )
+        self.assertEqual(responses, [
+            {"type": "vote-cast", "vote": "yes"},
+            {"type": "vote-cast", "vote": "yes"},
+            {"type": "vote-cast", "vote": "yes"},
+            {"type": "vote-cast", "vote": "yes"},
         ])
         self.assertEqual(stderr, "")
 
@@ -340,6 +373,26 @@ class AgentProcessTests(unittest.TestCase):
                     {"type": "decision", "history": history, "decision": {"kind": "vote"}}
                 )
                 self.assertEqual(responses, [{"type": "vote-cast", "vote": "no"}])
+                self.assertEqual(stderr, "")
+
+    def test_visible_prefix_regressions_support_fascist_self_and_dictator_governments(self) -> None:
+        for run_token, target_seq, president, chancellor in (
+            ("516838e7", 2, "seat-7", "seat-1"),
+            ("516838e7", 18, "seat-2", "seat-1"),
+            ("6daf104a", 54, "seat-1", "seat-6"),
+            ("bb845a93", 28, "seat-5", "seat-1"),
+        ):
+            with self.subTest(run=run_token, event=target_seq):
+                history = seat_visible_prefix(run_token, target_seq)
+                state = ReadModel.from_history(history)
+                self.assertEqual(state.role, "fascist")
+                self.assertEqual(state.president, president)
+                self.assertEqual(state.chancellor, chancellor)
+                self.assertLess(state.fascist_policies, 3)
+                responses, stderr = self.run_requests(
+                    {"type": "decision", "history": history, "decision": {"kind": "vote"}}
+                )
+                self.assertEqual(responses, [{"type": "vote-cast", "vote": "yes"}])
                 self.assertEqual(stderr, "")
 
 

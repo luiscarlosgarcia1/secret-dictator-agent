@@ -315,6 +315,17 @@ def _vote(state: ReadModel) -> str:
     if state.role == "fascist":
         if state.fascist_policies >= 3 and chancellor == state.known_dictator:
             return "yes"
+        # Before the Dictator-election threshold, take a consistent public
+        # pro-government position whenever this Fascist or its setup-authorized
+        # Dictator is in office.  This is a deliberate cover rule: it uses only
+        # the acting Seat's private setup knowledge, never a global role map.
+        # The threshold Chancellor case above stays first because it is the
+        # legally decisive Dictator-election win condition.
+        if state.fascist_policies < 3 and (
+            state.you in (president, chancellor)
+            or state.known_dictator in (president, chancellor)
+        ):
+            return "yes"
         fellows = _known_fellow_fascists(state)
         return "yes" if president in fellows or chancellor in fellows else "no"
     if state.role == "dictator" and state.fascist_policies >= 3 and chancellor == state.you:
