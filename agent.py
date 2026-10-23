@@ -37,6 +37,13 @@ def _seat_from_you(value: Any) -> str | None:
     return None
 
 
+def _role_from_you(value: Any) -> str | None:
+    """Return the authorized role carried by the Seat's setup observation."""
+    if isinstance(value, dict) and isinstance(value.get("role"), str):
+        return value["role"]
+    return None
+
+
 def _policy_name(value: Any) -> str | None:
     if isinstance(value, str) and value in (LIBERAL, FASCIST):
         return value
@@ -81,8 +88,14 @@ class ReadModel:
                 if seats:
                     state.seats = seats
                     state.alive = list(seats)
-                state.you = _seat_from_you(event.get("you")) or state.you
-                role = event.get("role")
+                you = event.get("you")
+                state.you = _seat_from_you(you) or state.you
+                # The role is private setup knowledge attached to the acting
+                # Seat.  Retain the top-level field only as a defensive
+                # compatibility fallback for partially recovered histories.
+                role = _role_from_you(you)
+                if role is None:
+                    role = event.get("role")
                 if isinstance(role, str):
                     state.role = role
                 state.known_fascists = _string_list(event.get("knownFascists"))

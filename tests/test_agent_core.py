@@ -6,18 +6,19 @@ import sys
 import unittest
 from pathlib import Path
 
+from agent import ReadModel
+
 
 ROOT = Path(__file__).resolve().parents[1]
 AGENT = ROOT / "agent.py"
 
 
-def start_event(*, president: str = "seat-1") -> dict:
+def start_event(*, president: str = "seat-1", role: str = "liberal") -> dict:
     return {
         "event": {
             "type": "game-started",
             "seats": [f"seat-{number}" for number in range(1, 8)],
-            "you": {"seat": "seat-1"},
-            "role": "liberal",
+            "you": {"seat": "seat-1", "role": role},
             "knownFascists": [],
             "knownDictator": None,
             "president": president,
@@ -49,6 +50,17 @@ class AgentProcessTests(unittest.TestCase):
         )
         self.assertEqual(responses, [{}, {"type": "chancellor-nominated", "target": "seat-2"}, {"type": "vote-cast", "vote": "yes"}])
         self.assertEqual(stderr, "")
+
+    def test_canonical_setup_roles_are_preserved_and_process_requests_stay_legal(self) -> None:
+        for role in ("liberal", "fascist", "dictator"):
+            with self.subTest(role=role):
+                history = [start_event(role=role)]
+                self.assertEqual(ReadModel.from_history(history).role, role)
+                responses, stderr = self.run_requests(
+                    {"type": "decision", "history": history, "decision": {"kind": "vote"}}
+                )
+                self.assertEqual(responses, [{"type": "vote-cast", "vote": "yes"}])
+                self.assertEqual(stderr, "")
 
     def test_nomination_excludes_term_limited_government_above_five_living_seats(self) -> None:
         history = [
