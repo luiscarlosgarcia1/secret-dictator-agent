@@ -147,6 +147,11 @@ class ReadModel:
                 state.veto_rejected = False
             elif event_type == "president-cards-drawn":
                 state.president_policies = _policies(event.get("policies"))
+            elif event_type == "president-policy-discarded":
+                # The President has already chosen from this private hand.  Do
+                # not allow a duplicated decision request to reuse those cards
+                # while the Chancellor's observation is still pending.
+                state.president_policies = []
             elif event_type == "chancellor-policies-received":
                 state.chancellor_policies = _policies(event.get("policies"))
                 state.veto_rejected = False

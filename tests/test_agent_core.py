@@ -159,6 +159,18 @@ class AgentProcessTests(unittest.TestCase):
         self.assertEqual(responses, [{}, {}, {"type": "veto-responded", "accepted": False}])
         self.assertEqual(stderr, "")
 
+    def test_president_discarded_event_clears_private_hand_before_a_repeat_request(self) -> None:
+        history = [
+            start_event(),
+            {"event": {"type": "president-cards-drawn", "policies": ["liberal", "fascist", "fascist"]}},
+            {"event": {"type": "president-policy-discarded", "policy": "fascist"}},
+        ]
+        responses, stderr = self.run_requests(
+            {"type": "decision", "history": history, "decision": {"kind": "president-discard"}},
+        )
+        self.assertEqual(responses, [{}])
+        self.assertEqual(stderr, "")
+
 
 if __name__ == "__main__":
     unittest.main()
