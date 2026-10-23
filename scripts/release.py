@@ -46,7 +46,8 @@ def main() -> None:
             archive.extractall(extracted)
         assert json.loads((extracted / "crucible.json").read_text()) == manifest
         smoke(extracted / manifest["entrypoint"])
-    print(f"protocol-ready package: {ARCHIVE}")
+    print(f"archive smoke test passed: {ARCHIVE}")
+    print("Protocol readiness requires the complete contract, replay, and randomized validation suite.")
     print("Competitive performance is unmeasured; no competitive-improvement claim is made.")
 
 

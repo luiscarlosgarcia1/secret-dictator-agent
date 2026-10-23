@@ -106,7 +106,9 @@ class ReleaseGateTests(unittest.TestCase):
     def test_release_script_creates_extracted_smoke_tested_archive(self) -> None:
         result = subprocess.run([sys.executable, str(ROOT / "scripts" / "release.py")], text=True, capture_output=True, timeout=10, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("protocol-ready package", result.stdout)
+        self.assertIn("archive smoke test passed", result.stdout)
+        self.assertIn("Protocol readiness requires", result.stdout)
+        self.assertNotIn("protocol-ready", result.stdout)
         self.assertIn("unmeasured", result.stdout)
 
 
