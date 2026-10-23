@@ -89,6 +89,7 @@ class ReadModel:
     chancellor_policies: list[str] = field(default_factory=list)
     veto_rejected: bool = False
     investigated: set[str] = field(default_factory=set)
+    confirmed_non_dictators: set[str] = field(default_factory=set)
     fascist_scores: dict[str, int] = field(default_factory=dict)
     dictator_risks: dict[str, int] = field(default_factory=dict)
     failed_governments: int = 0
@@ -159,6 +160,7 @@ class ReadModel:
                 state.chaos += 1
                 state.last_president = None
                 state.last_chancellor = None
+                state.failed_governments = 0
             elif event_type == "policy-enacted":
                 policy = _policy_name(event.get("policy"))
                 if policy is None:
@@ -205,6 +207,11 @@ class ReadModel:
                 if target in state.fascist_scores and result in (LIBERAL, FASCIST):
                     state.fascist_scores[target] = -5 if result == LIBERAL else 5
                     state.dictator_risks[target] = 0 if result == LIBERAL else 5
+                    # A Liberal result is the only structured visible fact that
+                    # affirmatively excludes the Dictator. Zero risk is merely
+                    # an absence of evidence, not an affirmative clearance.
+                    if result == LIBERAL:
+                        state.confirmed_non_dictators.add(target)
             elif event_type == "player-executed":
                 target = event.get("target")
                 if isinstance(target, str):
@@ -312,9 +319,17 @@ def _vote(state: ReadModel) -> str:
         return "yes" if president in fellows or chancellor in fellows else "no"
     if state.role == "dictator" and state.fascist_policies >= 3 and chancellor == state.you:
         return "yes"
-    if state.fascist_policies >= 3 and state.dictator_risks.get(chancellor, 0) > 0:
-        return "no"
     risk = state.combined_risk(president) + state.combined_risk(chancellor)
+    if state.faction == LIBERAL and state.fascist_policies >= 3:
+        # Electing the Dictator as Chancellor now ends the game. Only an
+        # authorized Liberal investigation clears a Chancellor. At two failed
+        # Governments, allow a zero-or-better public-risk Government to avoid
+        # an otherwise imminent Chaos policy.
+        if chancellor in state.confirmed_non_dictators:
+            return "yes"
+        if state.failed_governments >= 2 and risk <= 0:
+            return "yes"
+        return "no"
     # Chaos makes a borderline public government preferable to an unknown card.
     return "yes" if risk <= 1 or (state.failed_governments >= 2 and risk <= 2) else "no"
 

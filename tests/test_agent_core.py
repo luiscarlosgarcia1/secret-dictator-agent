@@ -11,6 +11,7 @@ from agent import ReadModel
 
 ROOT = Path(__file__).resolve().parents[1]
 AGENT = ROOT / "agent.py"
+RUNS = ROOT / "test runs"
 
 
 def start_event(*, president: str = "seat-1", role: str = "liberal", faction: str | None = None) -> dict:
@@ -27,6 +28,25 @@ def start_event(*, president: str = "seat-1", role: str = "liberal", faction: st
             "president": president,
         }
     }
+
+
+def seat_visible_prefix(run_token: str, target_seq: int, seat: str = "seat-1") -> list[dict]:
+    """Build a prefix solely from the Seat's recorded observations."""
+    replay_path = next(RUNS.glob(f"*{run_token}*.json"))
+    replay = json.loads(replay_path.read_text())
+    history: list[dict] = []
+    for item in replay["events"]:
+        if item.get("seq", -1) >= target_seq:
+            break
+        for observed in item.get("observedAs", []):
+            if seat not in observed.get("seats", []):
+                continue
+            history.extend(
+                {"event": entry["event"]}
+                for entry in observed.get("events", [])
+                if isinstance(entry.get("event"), dict)
+            )
+    return history
 
 
 class AgentProcessTests(unittest.TestCase):
@@ -274,6 +294,53 @@ class AgentProcessTests(unittest.TestCase):
             {"type": "vote-cast", "vote": "no"},
         ])
         self.assertEqual(stderr, "")
+
+    def test_liberal_threshold_votes_require_affirmative_chancellor_clearance(self) -> None:
+        threshold = [
+            start_event(president="seat-2"),
+            *[{"event": {"type": "policy-enacted", "policy": "fascist"}} for _ in range(3)],
+            {"event": {"type": "chancellor-nominated", "chancellor": "seat-3"}},
+        ]
+        cleared = threshold + [{"event": {"type": "investigation-result", "target": "seat-3", "faction": "liberal"}}]
+        known_fascist = threshold + [{"event": {"type": "investigation-result", "target": "seat-3", "faction": "fascist"}}]
+        chaos_imminent = threshold + [
+            {"event": {"type": "votes-revealed", "passed": False}},
+            {"event": {"type": "votes-revealed", "passed": False}},
+        ]
+        responses, stderr = self.run_requests(
+            {"type": "decision", "history": cleared, "decision": {"kind": "vote"}},
+            {"type": "decision", "history": known_fascist, "decision": {"kind": "vote"}},
+            {"type": "decision", "history": threshold, "decision": {"kind": "vote"}},
+            {"type": "decision", "history": chaos_imminent, "decision": {"kind": "vote"}},
+            {"type": "decision", "history": [{"event": {"type": "game-started", "seats": "bad"}}], "decision": {"kind": "vote"}},
+        )
+        self.assertEqual(responses, [
+            {"type": "vote-cast", "vote": "yes"},
+            {"type": "vote-cast", "vote": "no"},
+            {"type": "vote-cast", "vote": "no"},
+            {"type": "vote-cast", "vote": "yes"},
+            {"type": "vote-cast", "vote": "yes"},
+        ])
+        self.assertEqual(stderr, "")
+
+    def test_visible_prefix_regressions_reject_the_two_zero_risk_dictator_governments(self) -> None:
+        for run_token, target_seq, president, chancellor, policies in (
+            ("4616b2f7", 160, "seat-3", "seat-4", 4),
+            ("a8f9b092", 197, "seat-4", "seat-2", 3),
+        ):
+            with self.subTest(run=run_token, event=target_seq):
+                history = seat_visible_prefix(run_token, target_seq)
+                state = ReadModel.from_history(history)
+                self.assertEqual(state.role, "liberal")
+                self.assertEqual(state.president, president)
+                self.assertEqual(state.chancellor, chancellor)
+                self.assertEqual(state.fascist_policies, policies)
+                self.assertEqual(state.dictator_risks[chancellor], 0)
+                responses, stderr = self.run_requests(
+                    {"type": "decision", "history": history, "decision": {"kind": "vote"}}
+                )
+                self.assertEqual(responses, [{"type": "vote-cast", "vote": "no"}])
+                self.assertEqual(stderr, "")
 
 
 if __name__ == "__main__":
