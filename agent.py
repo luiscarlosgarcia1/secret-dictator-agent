@@ -55,6 +55,13 @@ def _policy_name(value: Any) -> str | None:
     return None
 
 
+def _policies(value: Any) -> list[str]:
+    """Return the usable policy cards from a private visible observation."""
+    if not isinstance(value, list):
+        return []
+    return [policy for item in value if (policy := _policy_name(item)) is not None]
+
+
 @dataclass
 class ReadModel:
     seats: list[str] = field(default_factory=list)
@@ -70,6 +77,9 @@ class ReadModel:
     liberal_policies: int = 0
     fascist_policies: int = 0
     chaos: int = 0
+    president_policies: list[str] = field(default_factory=list)
+    chancellor_policies: list[str] = field(default_factory=list)
+    veto_rejected: bool = False
 
     @classmethod
     def from_history(cls, history: Any) -> "ReadModel":
@@ -132,6 +142,21 @@ class ReadModel:
                     state.liberal_policies += 1
                 elif policy == FASCIST:
                     state.fascist_policies += 1
+                state.president_policies = []
+                state.chancellor_policies = []
+                state.veto_rejected = False
+            elif event_type == "president-cards-drawn":
+                state.president_policies = _policies(event.get("policies"))
+            elif event_type == "chancellor-policies-received":
+                state.chancellor_policies = _policies(event.get("policies"))
+                state.veto_rejected = False
+            elif event_type == "veto-responded":
+                accepted = event.get("accepted")
+                if isinstance(accepted, bool):
+                    state.veto_rejected = not accepted
+                    if accepted:
+                        state.president_policies = []
+                        state.chancellor_policies = []
             elif event_type == "player-executed":
                 target = event.get("target")
                 if isinstance(target, str):
@@ -162,8 +187,23 @@ class ReadModel:
         return next((seat for seat in self.seats if seat in legal), None)
 
 
+def _preferred_policy(state: ReadModel, hand: list[str], *, president: bool) -> str | None:
+    """Choose a policy from ``hand`` only, never from inferred deck state."""
+    if not hand:
+        return None
+    if state.role == FASCIST:
+        preferred = LIBERAL if president else FASCIST
+    else:
+        preferred = FASCIST if president else LIBERAL
+    return preferred if preferred in hand else hand[0]
+
+
+def _liberal_terminal_veto(state: ReadModel) -> bool:
+    return state.role == LIBERAL and state.fascist_policies >= 5
+
+
 def build_response(state: ReadModel, decision: Any) -> dict[str, Any]:
-    """Build the only ticket-01 response shapes, with deterministic fallbacks."""
+    """Build legal wire responses, validating every private-card selection."""
     kind = decision.get("kind") if isinstance(decision, dict) else None
     if kind == "nominate-chancellor":
         target = state.clockwise(state.chancellor_candidates())
@@ -174,6 +214,28 @@ def build_response(state: ReadModel, decision: Any) -> dict[str, Any]:
         return {"type": "chancellor-nominated", "target": None}
     if kind == "vote":
         return {"type": "vote-cast", "vote": "yes"}
+    if kind == "president-discard":
+        policy = _preferred_policy(state, state.president_policies, president=True)
+        if policy is not None:
+            return {"type": "president-discarded", "policy": policy}
+        return {}
+    if kind == "chancellor-legislate":
+        hand = state.chancellor_policies
+        if (
+            len(hand) == 2
+            and all(policy == FASCIST for policy in hand)
+            and _liberal_terminal_veto(state)
+            and not state.veto_rejected
+        ):
+            return {"type": "veto-requested"}
+        policy = _preferred_policy(state, hand, president=False)
+        if policy is not None:
+            return {"type": "policy-enacted", "policy": policy}
+        return {}
+    if kind == "president-veto-response":
+        # The request itself establishes that a veto is pending; the President
+        # has no right to inspect the Chancellor's private hand.
+        return {"type": "veto-responded", "accepted": _liberal_terminal_veto(state)}
     return {}
 
 

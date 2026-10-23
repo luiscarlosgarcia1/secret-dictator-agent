@@ -102,6 +102,63 @@ class AgentProcessTests(unittest.TestCase):
         self.assertEqual(responses, [{"type": "chancellor-nominated", "target": "seat-2"}, {"type": "vote-cast", "vote": "yes"}])
         self.assertEqual(stderr, "")
 
+    def test_private_policy_choices_are_hand_validated_for_both_factions(self) -> None:
+        for role, expected_discard, expected_enactment in (
+            ("liberal", "fascist", "liberal"),
+            ("fascist", "liberal", "fascist"),
+        ):
+            with self.subTest(role=role):
+                history = [
+                    start_event(role=role),
+                    {"event": {"type": "president-cards-drawn", "policies": ["liberal", "fascist", "fascist"]}},
+                    {"event": {"type": "chancellor-policies-received", "policies": ["liberal", "fascist"]}},
+                ]
+                responses, stderr = self.run_requests(
+                    {"type": "decision", "history": history, "decision": {"kind": "president-discard"}},
+                    {"type": "decision", "history": history, "decision": {"kind": "chancellor-legislate"}},
+                )
+                self.assertEqual(responses, [
+                    {"type": "president-discarded", "policy": expected_discard},
+                    {"type": "policy-enacted", "policy": expected_enactment},
+                ])
+                self.assertEqual(stderr, "")
+
+    def test_liberal_veto_requires_late_all_fascist_hand_and_rejection_blocks_retry(self) -> None:
+        late_hand = [
+            start_event(role="liberal"),
+            *[{"event": {"type": "policy-enacted", "policy": "fascist"}} for _ in range(5)],
+            {"event": {"type": "chancellor-policies-received", "policies": ["fascist", "fascist"]}},
+        ]
+        responses, _ = self.run_requests(
+            {"type": "decision", "history": late_hand, "decision": {"kind": "chancellor-legislate"}},
+            {"type": "decision", "history": late_hand, "decision": {"kind": "president-veto-response"}},
+            {
+                "type": "decision",
+                "history": late_hand + [{"event": {"type": "veto-responded", "accepted": False}}],
+                "decision": {"kind": "chancellor-legislate"},
+            },
+        )
+        self.assertEqual(responses, [
+            {"type": "veto-requested"},
+            {"type": "veto-responded", "accepted": True},
+            {"type": "policy-enacted", "policy": "fascist"},
+        ])
+
+    def test_incomplete_or_replaced_private_observations_never_reuse_a_hand(self) -> None:
+        history = [
+            start_event(),
+            {"event": {"type": "president-cards-drawn", "policies": ["liberal", "fascist", "fascist"]}},
+            {"event": {"type": "president-cards-drawn", "policies": "not cards"}},
+            {"event": {"type": "chancellor-policies-received", "policies": []}},
+        ]
+        responses, stderr = self.run_requests(
+            {"type": "decision", "history": history, "decision": {"kind": "president-discard"}},
+            {"type": "decision", "history": history, "decision": {"kind": "chancellor-legislate"}},
+            {"type": "decision", "history": history, "decision": {"kind": "president-veto-response"}},
+        )
+        self.assertEqual(responses, [{}, {}, {"type": "veto-responded", "accepted": False}])
+        self.assertEqual(stderr, "")
+
 
 if __name__ == "__main__":
     unittest.main()
