@@ -11,7 +11,7 @@ from agent import ReadModel
 
 ROOT = Path(__file__).resolve().parents[1]
 AGENT = ROOT / "agent.py"
-RUNS = ROOT / "test runs"
+VISIBLE_REGRESSIONS = ROOT / "tests" / "fixtures" / "seat_visible_regressions.json"
 
 
 def start_event(*, president: str = "seat-1", role: str = "liberal", faction: str | None = None) -> dict:
@@ -31,27 +31,10 @@ def start_event(*, president: str = "seat-1", role: str = "liberal", faction: st
 
 
 def seat_visible_prefix(run_token: str, target_seq: int, seat: str = "seat-1") -> list[dict]:
-    """Build a prefix solely from the Seat's recorded observations."""
-    replay_path = next(
-        (path for directory in (RUNS, ROOT) for path in directory.glob(f"*{run_token}*.json")),
-        None,
-    )
-    if replay_path is None:
-        raise FileNotFoundError(f"no replay found for {run_token}")
-    replay = json.loads(replay_path.read_text())
-    history: list[dict] = []
-    for item in replay["events"]:
-        if item.get("seq", -1) >= target_seq:
-            break
-        for observed in item.get("observedAs", []):
-            if seat not in observed.get("seats", []):
-                continue
-            history.extend(
-                {"event": entry["event"]}
-                for entry in observed.get("events", [])
-                if isinstance(entry.get("event"), dict)
-            )
-    return history
+    """Load the minimal recorded Seat-visible state for a regression ballot."""
+    fixtures = json.loads(VISIBLE_REGRESSIONS.read_text())
+    key = f"{run_token}:{target_seq}:{seat}"
+    return fixtures[key]
 
 
 class AgentProcessTests(unittest.TestCase):

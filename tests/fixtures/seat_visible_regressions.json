@@ -1,0 +1,55 @@
+{
+  "20711f3a:117:seat-1": [
+    {"event": {"type": "game-started", "seats": ["seat-1", "seat-2", "seat-3", "seat-4", "seat-5", "seat-6", "seat-7"], "president": "seat-7", "you": {"seat": "seat-1", "role": "liberal"}, "knownFascists": [], "knownDictator": null}},
+    {"event": {"type": "policy-enacted", "policy": "fascist"}},
+    {"event": {"type": "policy-enacted", "policy": "fascist"}},
+    {"event": {"type": "policy-enacted", "policy": "fascist"}},
+    {"event": {"type": "policy-enacted", "policy": "fascist"}},
+    {"event": {"type": "president-announced", "president": "seat-7"}},
+    {"event": {"type": "chancellor-nominated", "chancellor": "seat-1"}}
+  ],
+  "20711f3a:138:seat-1": [
+    {"event": {"type": "game-started", "seats": ["seat-1", "seat-2", "seat-3", "seat-4", "seat-5", "seat-6", "seat-7"], "president": "seat-4", "you": {"seat": "seat-1", "role": "liberal"}, "knownFascists": [], "knownDictator": null}},
+    {"event": {"type": "policy-enacted", "policy": "fascist"}},
+    {"event": {"type": "policy-enacted", "policy": "fascist"}},
+    {"event": {"type": "policy-enacted", "policy": "fascist"}},
+    {"event": {"type": "policy-enacted", "policy": "fascist"}},
+    {"event": {"type": "president-announced", "president": "seat-4"}},
+    {"event": {"type": "chancellor-nominated", "chancellor": "seat-1"}}
+  ],
+  "4616b2f7:160:seat-1": [
+    {"event": {"type": "game-started", "seats": ["seat-1", "seat-2", "seat-3", "seat-4", "seat-5", "seat-6", "seat-7"], "president": "seat-3", "you": {"seat": "seat-1", "role": "liberal"}, "knownFascists": [], "knownDictator": null}},
+    {"event": {"type": "policy-enacted", "policy": "fascist"}},
+    {"event": {"type": "policy-enacted", "policy": "fascist"}},
+    {"event": {"type": "policy-enacted", "policy": "fascist"}},
+    {"event": {"type": "policy-enacted", "policy": "fascist"}},
+    {"event": {"type": "president-announced", "president": "seat-3"}},
+    {"event": {"type": "chancellor-nominated", "chancellor": "seat-4"}}
+  ],
+  "a8f9b092:197:seat-1": [
+    {"event": {"type": "game-started", "seats": ["seat-1", "seat-2", "seat-3", "seat-4", "seat-5", "seat-6", "seat-7"], "president": "seat-4", "you": {"seat": "seat-1", "role": "liberal"}, "knownFascists": [], "knownDictator": null}},
+    {"event": {"type": "policy-enacted", "policy": "fascist"}},
+    {"event": {"type": "policy-enacted", "policy": "fascist"}},
+    {"event": {"type": "policy-enacted", "policy": "fascist"}},
+    {"event": {"type": "president-announced", "president": "seat-4"}},
+    {"event": {"type": "chancellor-nominated", "chancellor": "seat-2"}}
+  ],
+  "516838e7:2:seat-1": [
+    {"event": {"type": "game-started", "seats": ["seat-1", "seat-2", "seat-3", "seat-4", "seat-5", "seat-6", "seat-7"], "president": "seat-7", "you": {"seat": "seat-1", "role": "fascist", "faction": "fascist"}, "knownFascists": ["seat-3"], "knownDictator": "seat-2"}},
+    {"event": {"type": "chancellor-nominated", "chancellor": "seat-1"}}
+  ],
+  "516838e7:18:seat-1": [
+    {"event": {"type": "game-started", "seats": ["seat-1", "seat-2", "seat-3", "seat-4", "seat-5", "seat-6", "seat-7"], "president": "seat-2", "you": {"seat": "seat-1", "role": "fascist", "faction": "fascist"}, "knownFascists": ["seat-3"], "knownDictator": "seat-2"}},
+    {"event": {"type": "chancellor-nominated", "chancellor": "seat-1"}}
+  ],
+  "6daf104a:54:seat-1": [
+    {"event": {"type": "game-started", "seats": ["seat-1", "seat-2", "seat-3", "seat-4", "seat-5", "seat-6", "seat-7"], "president": "seat-1", "you": {"seat": "seat-1", "role": "fascist", "faction": "fascist"}, "knownFascists": ["seat-7"], "knownDictator": "seat-6"}},
+    {"event": {"type": "policy-enacted", "policy": "fascist"}},
+    {"event": {"type": "chancellor-nominated", "chancellor": "seat-6"}}
+  ],
+  "bb845a93:28:seat-1": [
+    {"event": {"type": "game-started", "seats": ["seat-1", "seat-2", "seat-3", "seat-4", "seat-5", "seat-6", "seat-7"], "president": "seat-5", "you": {"seat": "seat-1", "role": "fascist", "faction": "fascist"}, "knownFascists": ["seat-2"], "knownDictator": "seat-4"}},
+    {"event": {"type": "policy-enacted", "policy": "fascist"}},
+    {"event": {"type": "chancellor-nominated", "chancellor": "seat-1"}}
+  ]
+}
