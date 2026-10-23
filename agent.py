@@ -88,6 +88,7 @@ class ReadModel:
     president_policies: list[str] = field(default_factory=list)
     chancellor_policies: list[str] = field(default_factory=list)
     veto_rejected: bool = False
+    investigated: set[str] = field(default_factory=set)
 
     @classmethod
     def from_history(cls, history: Any) -> "ReadModel":
@@ -177,6 +178,10 @@ class ReadModel:
                     if accepted:
                         state.president_policies = []
                         state.chancellor_policies = []
+            elif event_type == "loyalty-investigated":
+                target = event.get("target")
+                if isinstance(target, str) and target in state.seats:
+                    state.investigated.add(target)
             elif event_type == "player-executed":
                 target = event.get("target")
                 if isinstance(target, str):
@@ -205,6 +210,13 @@ class ReadModel:
                 if candidate in legal:
                     return candidate
         return next((seat for seat in self.seats if seat in legal), None)
+
+    def executive_candidates(self, kind: str) -> list[str]:
+        """Return runner-legal public targets for an executive decision."""
+        candidates = [seat for seat in self.alive if seat != self.president]
+        if kind == "investigate-player":
+            candidates = [seat for seat in candidates if seat not in self.investigated]
+        return candidates
 
 
 def _preferred_policy(state: ReadModel, hand: list[str], *, president: bool) -> str | None:
@@ -256,6 +268,19 @@ def build_response(state: ReadModel, decision: Any) -> dict[str, Any]:
         # The request itself establishes that a veto is pending; the President
         # has no right to inspect the Chancellor's private hand.
         return {"type": "veto-responded", "accepted": _liberal_terminal_veto(state)}
+    if kind == "investigate-player":
+        target = state.clockwise(state.executive_candidates(kind))
+        return {"type": "loyalty-investigated", "target": target} if target is not None else {}
+    if kind == "special-election":
+        target = state.clockwise(state.executive_candidates(kind))
+        return {"type": "special-election-called", "target": target} if target is not None else {}
+    if kind == "execute-player":
+        target = state.clockwise(state.executive_candidates(kind))
+        return {"type": "player-executed", "target": target} if target is not None else {}
+    if kind == "discuss":
+        # Default to the smallest legal public contribution.  It contains no
+        # role, policy-hand, investigation, or heuristic information.
+        return {"type": "discussion-contributed"}
     return {}
 
 

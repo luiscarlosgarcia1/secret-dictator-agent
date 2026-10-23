@@ -176,6 +176,57 @@ class AgentProcessTests(unittest.TestCase):
         self.assertEqual(responses, [{}])
         self.assertEqual(stderr, "")
 
+    def test_executive_targets_are_live_non_president_and_investigations_are_unique(self) -> None:
+        history = [
+            start_event(president="seat-3"),
+            {"event": {"type": "loyalty-investigated", "target": "seat-2"}},
+            {"event": {"type": "player-executed", "target": "seat-4"}},
+        ]
+        responses, stderr = self.run_requests(
+            {"type": "decision", "history": history, "decision": {"kind": "investigate-player"}},
+            {"type": "decision", "history": history, "decision": {"kind": "special-election"}},
+            {"type": "decision", "history": history, "decision": {"kind": "execute-player"}},
+        )
+        self.assertEqual(responses, [
+            {"type": "loyalty-investigated", "target": "seat-5"},
+            {"type": "special-election-called", "target": "seat-2"},
+            {"type": "player-executed", "target": "seat-2"},
+        ])
+        self.assertEqual(stderr, "")
+
+    def test_executive_exhaustion_and_discussion_are_controlled_and_private_free(self) -> None:
+        exhausted_history = [
+            start_event(president="seat-1"),
+            *[
+                {"event": {"type": "loyalty-investigated", "target": f"seat-{number}"}}
+                for number in range(2, 8)
+            ],
+            {"event": {"type": "chancellor-policies-received", "policies": ["fascist", "fascist"]}},
+        ]
+        responses, stderr = self.run_requests(
+            {"type": "decision", "history": exhausted_history, "decision": {"kind": "investigate-player"}},
+            {"type": "decision", "history": exhausted_history, "decision": {"kind": "discuss", "text": ["bad"]}},
+        )
+        self.assertEqual(responses, [{}, {"type": "discussion-contributed"}])
+        self.assertEqual(stderr, "")
+
+    def test_executive_single_target_is_used_for_special_election_and_execution(self) -> None:
+        history = [
+            start_event(president="seat-1"),
+            *[
+                {"event": {"type": "player-executed", "target": f"seat-{number}"}}
+                for number in range(2, 7)
+            ],
+        ]
+        responses, _ = self.run_requests(
+            {"type": "decision", "history": history, "decision": {"kind": "special-election"}},
+            {"type": "decision", "history": history, "decision": {"kind": "execute-player"}},
+        )
+        self.assertEqual(responses, [
+            {"type": "special-election-called", "target": "seat-7"},
+            {"type": "player-executed", "target": "seat-7"},
+        ])
+
 
 if __name__ == "__main__":
     unittest.main()
