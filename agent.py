@@ -275,13 +275,19 @@ def _fascist_team(state: ReadModel) -> set[str]:
     return set(state.known_fascists) | ({state.known_dictator} if state.known_dictator else set())
 
 
+def _known_fellow_fascists(state: ReadModel) -> set[str]:
+    """Return Fascist teammates without exposing the known Dictator early."""
+    if state.role != "fascist":
+        return set()
+    return set(state.known_fascists)
+
+
 def _nomination_target(state: ReadModel) -> str | None:
     candidates = state.chancellor_candidates()
-    team = _fascist_team(state)
     if state.role == "fascist":
         if state.fascist_policies >= 3 and state.known_dictator in candidates:
             return state.known_dictator
-        teammates = [seat for seat in candidates if seat in team]
+        teammates = [seat for seat in candidates if seat in _known_fellow_fascists(state)]
         pool = teammates or candidates
         best = min((state.combined_risk(seat) for seat in pool), default=None)
         return state.clockwise([seat for seat in pool if state.combined_risk(seat) == best])
@@ -299,11 +305,11 @@ def _vote(state: ReadModel) -> str:
     president, chancellor = state.president, state.chancellor
     if not isinstance(president, str) or not isinstance(chancellor, str):
         return "yes"
-    team = _fascist_team(state)
     if state.role == "fascist":
         if state.fascist_policies >= 3 and chancellor == state.known_dictator:
             return "yes"
-        return "yes" if president in team or chancellor in team else "no"
+        fellows = _known_fellow_fascists(state)
+        return "yes" if president in fellows or chancellor in fellows else "no"
     if state.role == "dictator" and state.fascist_policies >= 3 and chancellor == state.you:
         return "yes"
     if state.fascist_policies >= 3 and state.dictator_risks.get(chancellor, 0) > 0:

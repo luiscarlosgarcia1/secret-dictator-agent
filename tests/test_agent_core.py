@@ -256,6 +256,25 @@ class AgentProcessTests(unittest.TestCase):
         ])
         self.assertEqual(stderr, "")
 
+    def test_fascists_protect_the_known_dictator_before_three_policies(self) -> None:
+        fascist_start = start_event(president="seat-1", role="fascist", faction="fascist")
+        fascist_start["event"]["knownFascists"] = ["seat-2"]
+        fascist_start["event"]["knownDictator"] = "seat-3"
+        history = [fascist_start]
+        responses, stderr = self.run_requests(
+            {"type": "decision", "history": history, "decision": {"kind": "nominate-chancellor"}},
+            {
+                "type": "decision",
+                "history": history + [{"event": {"type": "chancellor-nominated", "chancellor": "seat-3"}}],
+                "decision": {"kind": "vote"},
+            },
+        )
+        self.assertEqual(responses, [
+            {"type": "chancellor-nominated", "target": "seat-2"},
+            {"type": "vote-cast", "vote": "no"},
+        ])
+        self.assertEqual(stderr, "")
+
 
 if __name__ == "__main__":
     unittest.main()
