@@ -1,0 +1,21 @@
+# Define replay validation and release gates
+
+Type: prototype
+Status: resolved
+Blocked by: 01, 02
+
+## Question
+
+What local replay-driven tests, synthetic protocol cases, packaging checks, and evidence thresholds are required before claiming fault resistance or a competitive improvement over the baseline?
+
+## Answer
+
+Build a standard-library offline harness that starts the Python process, sends one `init` then one decision JSONL line at a time, and asserts exactly one parseable stdout JSON object before a short local timeout; capture stderr separately and fail any stdout contamination, second reply, exception, or missing flush. Feed the harness seat-projected event sequences rather than the replay's global `events`: use the supplied `example_run.json` to extract public prefixes and each `observedAs` view, then synthesize the matching live request with its `decision`, `history`, and a nonzero `deadlineMs`. Never supply the replay's global roles, deck, or hidden policy cards to a simulated seat.
+
+The mandatory contract matrix has a case for `init` and each eight decision kinds, for every available role (Liberal, Fascist, Dictator) and each action-bearing seat position. Include boundaries: first government; seven, six, and five live seats (term-limit change); previous President/Chancellor exclusions; only legal target; no uninvestigated target; duplicate investigation; all-Liberal/all-Fascist/mixed policy hands; Fascist-policy counts 0, 3, and 5; accepted and rejected vetoes; chaos reset; dead player removal; investigated faction visible only to investigator; special election return; execution; deck reshuffle; and empty/malformed optional text. Assertions must validate response `type`, enums, target membership in a harness-computed legal set, policy membership in the private hand, and no accidental private facts in discussion.
+
+Add replay regression tests for every decision request that can be reconstructed from `example_run.json`: replay its seat-visible prefix through the candidate, validate the candidate response against the contract (not against the historical bot's tactical choice), and assert deterministic repeatability for the same input. Store minimal hand-built fixtures for branches absent from the example replay, particularly President discard, veto request/response, execution, failed governments/chaos, and policy peek if the profile later exposes it. Add property-style randomized histories only after the fixed matrix: generate coherent state transitions, then check that the final response builder never emits an invalid target or unavailable policy. Malformed-history fuzz cases must instead produce a bounded safe response where a legal action exists, and must never throw.
+
+Release packaging gates are: `python3.13 -m py_compile agent.py`; clean JSONL smoke test; harness pass for the full matrix and replay regressions; a ZIP containing only `crucible.json` and the entrypoint (plus test-free necessary files), with `crucible.json` at archive root, `runtime` set to `python313`, and the entrypoint path verified after extracting to a temporary directory; then run the same smoke request through the extracted entrypoint. Keep source and archive well below the supplied size limits. Fail closed on any unsupported decision kind or insufficient state only when no protocol-valid response can be derived; otherwise emit the documented legal fallback, and log the anomaly to stderr.
+
+Claims have separate evidence thresholds. Call the agent **protocol-ready** only after all fixed contract cases, every reconstructable replay decision, packaging smoke checks, and at least 1,000 coherent randomized legal-response checks pass with zero faults. Call it **competitively improved** only after a reproducible multi-seed tournament against the exact baseline and a stated mixed-opponent lineup, with seat/role-balanced reporting, fault count, confidence interval, and no AI-relay dependence. Do not promise a “very large majority” until enough role-balanced completed games support it; at minimum report the raw wins/total and composition, and keep practice/tournament evidence separate. The current evidence is design-only, so neither claim is presently justified.
