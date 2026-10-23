@@ -44,6 +44,13 @@ def _role_from_you(value: Any) -> str | None:
     return None
 
 
+def _faction_from_you(value: Any) -> str | None:
+    """Return the authorized faction carried by the Seat's setup observation."""
+    if isinstance(value, dict) and value.get("faction") in (LIBERAL, FASCIST):
+        return value["faction"]
+    return None
+
+
 def _policy_name(value: Any) -> str | None:
     if isinstance(value, str) and value in (LIBERAL, FASCIST):
         return value
@@ -67,6 +74,7 @@ class ReadModel:
     seats: list[str] = field(default_factory=list)
     you: str | None = None
     role: str | None = None
+    faction: str | None = None
     known_fascists: list[str] = field(default_factory=list)
     known_dictator: str | None = None
     alive: list[str] = field(default_factory=list)
@@ -108,6 +116,13 @@ class ReadModel:
                     role = event.get("role")
                 if isinstance(role, str):
                     state.role = role
+                faction = _faction_from_you(you)
+                if faction is None:
+                    # The role is enough only for the two non-Dictator roles;
+                    # a Dictator is Fascist-aligned without learning its team.
+                    faction = FASCIST if state.role == "dictator" else state.role
+                if faction in (LIBERAL, FASCIST):
+                    state.faction = faction
                 state.known_fascists = _string_list(event.get("knownFascists"))
                 dictator = event.get("knownDictator")
                 state.known_dictator = dictator if isinstance(dictator, str) else None
@@ -191,7 +206,7 @@ def _preferred_policy(state: ReadModel, hand: list[str], *, president: bool) -> 
     """Choose a policy from ``hand`` only, never from inferred deck state."""
     if not hand:
         return None
-    if state.role == FASCIST:
+    if state.faction == FASCIST:
         preferred = LIBERAL if president else FASCIST
     else:
         preferred = FASCIST if president else LIBERAL
@@ -199,7 +214,7 @@ def _preferred_policy(state: ReadModel, hand: list[str], *, president: bool) -> 
 
 
 def _liberal_terminal_veto(state: ReadModel) -> bool:
-    return state.role == LIBERAL and state.fascist_policies >= 5
+    return state.faction == LIBERAL and state.fascist_policies >= 5
 
 
 def build_response(state: ReadModel, decision: Any) -> dict[str, Any]:

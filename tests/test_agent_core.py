@@ -13,12 +13,15 @@ ROOT = Path(__file__).resolve().parents[1]
 AGENT = ROOT / "agent.py"
 
 
-def start_event(*, president: str = "seat-1", role: str = "liberal") -> dict:
+def start_event(*, president: str = "seat-1", role: str = "liberal", faction: str | None = None) -> dict:
+    you = {"seat": "seat-1", "role": role}
+    if faction is not None:
+        you["faction"] = faction
     return {
         "event": {
             "type": "game-started",
             "seats": [f"seat-{number}" for number in range(1, 8)],
-            "you": {"seat": "seat-1", "role": role},
+            "you": you,
             "knownFascists": [],
             "knownDictator": None,
             "president": president,
@@ -102,14 +105,15 @@ class AgentProcessTests(unittest.TestCase):
         self.assertEqual(responses, [{"type": "chancellor-nominated", "target": "seat-2"}, {"type": "vote-cast", "vote": "yes"}])
         self.assertEqual(stderr, "")
 
-    def test_private_policy_choices_are_hand_validated_for_both_factions(self) -> None:
-        for role, expected_discard, expected_enactment in (
-            ("liberal", "fascist", "liberal"),
-            ("fascist", "liberal", "fascist"),
+    def test_private_policy_choices_are_hand_validated_for_every_faction_role(self) -> None:
+        for role, faction, expected_discard, expected_enactment in (
+            ("liberal", "liberal", "fascist", "liberal"),
+            ("fascist", "fascist", "liberal", "fascist"),
+            ("dictator", "fascist", "liberal", "fascist"),
         ):
             with self.subTest(role=role):
                 history = [
-                    start_event(role=role),
+                    start_event(role=role, faction=faction),
                     {"event": {"type": "president-cards-drawn", "policies": ["liberal", "fascist", "fascist"]}},
                     {"event": {"type": "chancellor-policies-received", "policies": ["liberal", "fascist"]}},
                 ]
@@ -122,6 +126,7 @@ class AgentProcessTests(unittest.TestCase):
                     {"type": "policy-enacted", "policy": expected_enactment},
                 ])
                 self.assertEqual(stderr, "")
+                self.assertEqual(ReadModel.from_history(history).faction, faction)
 
     def test_liberal_veto_requires_late_all_fascist_hand_and_rejection_blocks_retry(self) -> None:
         late_hand = [
