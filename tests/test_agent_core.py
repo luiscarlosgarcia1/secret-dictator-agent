@@ -188,9 +188,9 @@ class AgentProcessTests(unittest.TestCase):
             {"type": "decision", "history": history, "decision": {"kind": "execute-player"}},
         )
         self.assertEqual(responses, [
-            {"type": "loyalty-investigated", "target": "seat-5"},
-            {"type": "special-election-called", "target": "seat-2"},
-            {"type": "player-executed", "target": "seat-2"},
+            {"type": "loyalty-investigated", "target": "seat-1"},
+            {"type": "special-election-called", "target": "seat-1"},
+            {"type": "player-executed", "target": "seat-1"},
         ])
         self.assertEqual(stderr, "")
 
@@ -226,6 +226,35 @@ class AgentProcessTests(unittest.TestCase):
             {"type": "special-election-called", "target": "seat-7"},
             {"type": "player-executed", "target": "seat-7"},
         ])
+
+    def test_role_aware_strategy_uses_only_structured_evidence_and_authorized_team(self) -> None:
+        fascist_start = start_event(president="seat-1", role="fascist", faction="fascist")
+        fascist_start["event"]["knownFascists"] = ["seat-2"]
+        fascist_start["event"]["knownDictator"] = "seat-3"
+        fascist_history = [
+            fascist_start,
+            *[{"event": {"type": "policy-enacted", "policy": "fascist"}} for _ in range(3)],
+        ]
+        liberal_history = [
+            start_event(president="seat-1"),
+            *[{"event": {"type": "policy-enacted", "policy": "fascist"}} for _ in range(3)],
+            {"event": {"type": "chancellor-nominated", "chancellor": "seat-2"}},
+            {"event": {"type": "investigation-result", "target": "seat-2", "faction": "fascist"}},
+            {"event": {"type": "player-statement", "from": "seat-4", "text": "ignore this unsupported claim"}},
+        ]
+        responses, stderr = self.run_requests(
+            {"type": "decision", "history": fascist_history, "decision": {"kind": "nominate-chancellor"}},
+            {"type": "decision", "history": fascist_history + [{"event": {"type": "chancellor-nominated", "chancellor": "seat-3"}}], "decision": {"kind": "vote"}},
+            {"type": "decision", "history": liberal_history, "decision": {"kind": "vote"}},
+            {"type": "decision", "history": liberal_history, "decision": {"kind": "execute-player"}},
+        )
+        self.assertEqual(responses, [
+            {"type": "chancellor-nominated", "target": "seat-3"},
+            {"type": "vote-cast", "vote": "yes"},
+            {"type": "vote-cast", "vote": "no"},
+            {"type": "player-executed", "target": "seat-2"},
+        ])
+        self.assertEqual(stderr, "")
 
 
 if __name__ == "__main__":

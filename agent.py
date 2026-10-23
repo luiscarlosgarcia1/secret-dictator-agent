@@ -89,6 +89,9 @@ class ReadModel:
     chancellor_policies: list[str] = field(default_factory=list)
     veto_rejected: bool = False
     investigated: set[str] = field(default_factory=set)
+    fascist_scores: dict[str, int] = field(default_factory=dict)
+    dictator_risks: dict[str, int] = field(default_factory=dict)
+    failed_governments: int = 0
 
     @classmethod
     def from_history(cls, history: Any) -> "ReadModel":
@@ -107,6 +110,8 @@ class ReadModel:
                 if seats:
                     state.seats = seats
                     state.alive = list(seats)
+                    state.fascist_scores = {seat: 0 for seat in seats}
+                    state.dictator_risks = {seat: 0 for seat in seats}
                 you = event.get("you")
                 state.you = _seat_from_you(you) or state.you
                 # The role is private setup knowledge attached to the acting
@@ -146,6 +151,10 @@ class ReadModel:
                 if isinstance(chancellor, str):
                     state.last_chancellor = chancellor
                     state.chancellor = chancellor
+                state.failed_governments = 0
+            elif event_type == "votes-revealed":
+                if event.get("passed") is False:
+                    state.failed_governments = min(2, state.failed_governments + 1)
             elif event_type == "chaos-triggered":
                 state.chaos += 1
                 state.last_president = None
@@ -158,6 +167,14 @@ class ReadModel:
                     state.liberal_policies += 1
                 elif policy == FASCIST:
                     state.fascist_policies += 1
+                # Only a government policy is evidence about officeholders;
+                # Chaos has no such pair.  Never infer a hand or use claims.
+                if event.get("source") == "government":
+                    delta = -1 if policy == LIBERAL else 1
+                    for official in (state.president, state.chancellor):
+                        if official in state.fascist_scores:
+                            state.fascist_scores[official] = max(-5, min(5, state.fascist_scores[official] + delta))
+                            state.dictator_risks[official] = max(0, min(5, state.dictator_risks[official] + delta))
                 state.president_policies = []
                 state.chancellor_policies = []
                 state.veto_rejected = False
@@ -182,6 +199,12 @@ class ReadModel:
                 target = event.get("target")
                 if isinstance(target, str) and target in state.seats:
                     state.investigated.add(target)
+            elif event_type == "investigation-result":
+                target = event.get("target")
+                result = event.get("faction") or event.get("result")
+                if target in state.fascist_scores and result in (LIBERAL, FASCIST):
+                    state.fascist_scores[target] = -5 if result == LIBERAL else 5
+                    state.dictator_risks[target] = 0 if result == LIBERAL else 5
             elif event_type == "player-executed":
                 target = event.get("target")
                 if isinstance(target, str):
@@ -218,6 +241,17 @@ class ReadModel:
             candidates = [seat for seat in candidates if seat not in self.investigated]
         return candidates
 
+    def combined_risk(self, seat: str) -> int:
+        return self.fascist_scores.get(seat, 0) + self.dictator_risks.get(seat, 0)
+
+    def ordered_by_risk(self, candidates: Iterable[str], *, highest: bool = False) -> list[str]:
+        position = {seat: index for index, seat in enumerate(self.seats)}
+        return sorted(candidates, key=lambda seat: ((-1 if highest else 1) * self.combined_risk(seat), position.get(seat, len(position))))
+
+    def public_choice(self, candidates: Iterable[str], *, highest: bool = False) -> str | None:
+        ordered = self.ordered_by_risk(candidates, highest=highest)
+        return ordered[0] if ordered else None
+
 
 def _preferred_policy(state: ReadModel, hand: list[str], *, president: bool) -> str | None:
     """Choose a policy from ``hand`` only, never from inferred deck state."""
@@ -234,18 +268,72 @@ def _liberal_terminal_veto(state: ReadModel) -> bool:
     return state.faction == LIBERAL and state.fascist_policies >= 5
 
 
+def _fascist_team(state: ReadModel) -> set[str]:
+    """Return only setup-authorized teammates; Dictator gets no invented team."""
+    if state.role != "fascist":
+        return set()
+    return set(state.known_fascists) | ({state.known_dictator} if state.known_dictator else set())
+
+
+def _nomination_target(state: ReadModel) -> str | None:
+    candidates = state.chancellor_candidates()
+    team = _fascist_team(state)
+    if state.role == "fascist":
+        if state.fascist_policies >= 3 and state.known_dictator in candidates:
+            return state.known_dictator
+        teammates = [seat for seat in candidates if seat in team]
+        pool = teammates or candidates
+        best = min((state.combined_risk(seat) for seat in pool), default=None)
+        return state.clockwise([seat for seat in pool if state.combined_risk(seat) == best])
+    safe = list(candidates)
+    if state.fascist_policies >= 3:
+        # At the election threshold, never select a known Fascist and prefer
+        # the least dictator-risk candidate using structured evidence only.
+        safe = [seat for seat in safe if state.fascist_scores.get(seat, 0) < 5] or safe
+        return min(safe, key=lambda seat: (state.dictator_risks.get(seat, 0), state.combined_risk(seat), state.seats.index(seat))) if safe else None
+    best = min((state.combined_risk(seat) for seat in safe), default=None)
+    return state.clockwise([seat for seat in safe if state.combined_risk(seat) == best])
+
+
+def _vote(state: ReadModel) -> str:
+    president, chancellor = state.president, state.chancellor
+    if not isinstance(president, str) or not isinstance(chancellor, str):
+        return "yes"
+    team = _fascist_team(state)
+    if state.role == "fascist":
+        if state.fascist_policies >= 3 and chancellor == state.known_dictator:
+            return "yes"
+        return "yes" if president in team or chancellor in team else "no"
+    if state.role == "dictator" and state.fascist_policies >= 3 and chancellor == state.you:
+        return "yes"
+    if state.fascist_policies >= 3 and state.dictator_risks.get(chancellor, 0) > 0:
+        return "no"
+    risk = state.combined_risk(president) + state.combined_risk(chancellor)
+    # Chaos makes a borderline public government preferable to an unknown card.
+    return "yes" if risk <= 1 or (state.failed_governments >= 2 and risk <= 2) else "no"
+
+
+def _executive_target(state: ReadModel, kind: str) -> str | None:
+    candidates = state.executive_candidates(kind)
+    team = _fascist_team(state)
+    if state.role == "fascist":
+        safe = [seat for seat in candidates if seat not in team]
+        return state.public_choice(safe or candidates, highest=True)
+    return state.public_choice(candidates, highest=kind != "special-election")
+
+
 def build_response(state: ReadModel, decision: Any) -> dict[str, Any]:
     """Build legal wire responses, validating every private-card selection."""
     kind = decision.get("kind") if isinstance(decision, dict) else None
     if kind == "nominate-chancellor":
-        target = state.clockwise(state.chancellor_candidates())
+        target = _nomination_target(state) or state.clockwise(state.chancellor_candidates())
         if target is not None:
             return {"type": "chancellor-nominated", "target": target}
         # The runner cannot issue a valid nomination without a target.  This is
         # intentionally a controlled sentinel rather than an uncaught failure.
         return {"type": "chancellor-nominated", "target": None}
     if kind == "vote":
-        return {"type": "vote-cast", "vote": "yes"}
+        return {"type": "vote-cast", "vote": _vote(state)}
     if kind == "president-discard":
         policy = _preferred_policy(state, state.president_policies, president=True)
         if policy is not None:
@@ -269,13 +357,13 @@ def build_response(state: ReadModel, decision: Any) -> dict[str, Any]:
         # has no right to inspect the Chancellor's private hand.
         return {"type": "veto-responded", "accepted": _liberal_terminal_veto(state)}
     if kind == "investigate-player":
-        target = state.clockwise(state.executive_candidates(kind))
+        target = _executive_target(state, kind) or state.clockwise(state.executive_candidates(kind))
         return {"type": "loyalty-investigated", "target": target} if target is not None else {}
     if kind == "special-election":
-        target = state.clockwise(state.executive_candidates(kind))
+        target = _executive_target(state, kind) or state.clockwise(state.executive_candidates(kind))
         return {"type": "special-election-called", "target": target} if target is not None else {}
     if kind == "execute-player":
-        target = state.clockwise(state.executive_candidates(kind))
+        target = _executive_target(state, kind) or state.clockwise(state.executive_candidates(kind))
         return {"type": "player-executed", "target": target} if target is not None else {}
     if kind == "discuss":
         # Default to the smallest legal public contribution.  It contains no
